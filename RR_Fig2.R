@@ -17,17 +17,17 @@ NewDATA$dry_bulk_density.gcm3_corrected <- NewDATA$Dry_bulk_density_gcm3 * NewDA
 NewDATA$CarbonDensity.gcm3 <- NewDATA$dry_bulk_density.gcm3_corrected * NewDATA$C_percent/100
 NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$SliceLength.cm )
 
+#Check ranges:
 range(NewDATA$Lab_Compaction_Correction_Value, na.rm = T)# Check if all values are  below 1 = If value = 1 this core had no records of compaction
 range(NewDATA$CarbonStock.Mgha, na.rm = T )# 0.0000 125.6347
 range(NewDATA$CarbonDensity.gcm3, na.rm = T )#0.00000000 0.06281735
 
-#Compute total C-stock till 100 cm deep:========
+#Soil C-stock till 100 cm deep:========
 soil <- select(NewDATA, Site, Site_short,Site_Core, Treatment,Depth_to, Depth_Range,
                Site_Core, Carbon_stock_in_section_Mg_Cha,Treatment2,CarbonStock.Mgha,
                Lab_Compaction_Correction_Value)%>%
   filter  (Treatment != "Saltmarsh_natural") %>%
   filter (Depth_to <= 100 ) %>% #keeping only top 100 cm of each core
-  mutate (Stock = "Soil") %>% #Assigning additional category, indicatig it is soil stock
   group_by(Site_Core) %>% #grouping by core till 100 cm
   summarise(TotalCarbonStockPerCore = sum(CarbonStock.Mgha))%>% #Add-up all slices 
   separate(Site_Core, into = c("Site","CoreNumber"), sep = "_") %>%
@@ -38,17 +38,16 @@ soil <- select(NewDATA, Site, Site_short,Site_Core, Treatment,Depth_to, Depth_Ra
             SE = SD / sqrt(N)) %>%
   mutate (Stock = "Soil")
 
-soil_carbon <- left_join(soil, SiteTreat, by = "Site" )#Add corresponding Site and treatments:
-soil_carbon
+#Add corresponding Site and treatments from SiteTreat:
+soil_carbon <- left_join(soil, SiteTreat, by = "Site" )
 
-#Compute Plant C-Stock (mean +- SE):=========
+#Plant C-Stock (mean +- SE):=========
 plant <- select (aa, Site,  Total_Aboveground_Biomass_kg_100m2) %>%
   mutate(Plant_C_Mgha = 0.464*Total_Aboveground_Biomass_kg_100m2 / 10 )%>% #1 kg/100m2 = 0.1 tonnes/ha
-  gather(key = treat, value = mass, Plant_C_Mgha) %>% 
-  group_by(Site) %>%
-  summarise(AV=mean(mass, na.rm = T),
-            SD=sd(mass),
-            N = length(mass),
+  group_by(Site) %>%    #delete this line to get overall plant_C average
+  summarise(AV=mean(Plant_C_Mgha, na.rm = T),
+            SD=sd(Plant_C_Mgha),
+            N = length(Plant_C_Mgha),
             SE= SD / sqrt(N)) %>%
   mutate (Stock = "Plant")
 
@@ -56,6 +55,20 @@ plant <- select (aa, Site,  Total_Aboveground_Biomass_kg_100m2) %>%
 plant[is.na(plant)] <- 0 #Replace NaN with zeros:
 plant_carbon<-left_join(plant, SiteTreat, by = "Site") #join with site descriptives file
 plant_carbon
+
+#Average of all plant carbon stocks (use 0.464 conversion factor) at Rehabilitated:
+plant_av <- select (aa, Site,  Total_Aboveground_Biomass_kg_100m2) %>%
+  mutate(Plant_C_Mgha = 0.464*Total_Aboveground_Biomass_kg_100m2 / 10 )%>% #1 kg/100m2 = 0.1 tonnes/ha
+  left_join( SiteTreat, by = "Site") %>%
+  filter(SiteRenamed == "Rehabilitated") %>%
+  summarise(AV=mean(Plant_C_Mgha, na.rm = T),
+            SD=sd(Plant_C_Mgha),
+            N = length(Plant_C_Mgha),
+            SE= SD / sqrt(N)) %>%
+  mutate (Stock = "Plant")
+
+plant_av #        AV       SD     N       SE Stock
+#              50.32934 27.41857 23 5.717167 Plant
 
 #Merge plant and soil data together:
 ab <- rbind (plant_carbon, soil_carbon)%>%
@@ -67,13 +80,13 @@ ab_Disturbed <- filter(ab, SiteOldName == "Disturbed") #aka Converted
 ab_Remnant <- filter(ab, SiteOldName == "Remnant") #aka Established
 
 #Draw a figure:
-MyBreaks <- c(-300, -200,-100, -50, 0, 50, 100, 200,300 ,400,500)
+MyBreaks <- c(-300, -200,-100, -50, 0, 50, 100, 200,300)
 #Plot Converted Plant/Soil stock:========
 plot_Converted <- ggplot(ab_Disturbed, aes(x=as.factor(SiteYear_old), y=AV, fill = Stock))+
   geom_bar(position="identity", stat="identity")+
   geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
   geom_hline(yintercept=0)+
-  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-300,600))+ #abs to remove negative values on y-axis below 0
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-300,300))+ #abs to remove negative values on y-axis below 0
   scale_fill_manual(values = c("darkgreen","lightblue"))+
   xlab("Site")+ ylab(bquote("Organic carbon stock " (Mg*~ha^-1)))+
   ggtitle("Converted")+
@@ -89,12 +102,13 @@ plot_Converted <- ggplot(ab_Disturbed, aes(x=as.factor(SiteYear_old), y=AV, fill
 plot_Converted 
 
 #Plot Rehabilitated Plant/Soil stock:=======
-ab_Rehabilitated$SiteYear_old<- factor(ab_Rehabilitated$SiteYear_old, levels = c(2003, 2001,1992,1991,1981,1977))
-plot_Rehabilitated <- ggplot(ab_Rehabilitated, aes(x=as.factor(SiteYear_old), y=AV, fill = Stock))+
+levels(ab_Rehabilitated$SiteYear)# "2000"  "1997"  "1992"  "1991"  "1980"  "1980A" A stands for Aegiceras- dominated site
+ab_Rehabilitated$SiteYear<- factor(ab_Rehabilitated$SiteYear, levels = c("2000","1997","1992","1991","1980","1980A"))
+plot_Rehabilitated <- ggplot(ab_Rehabilitated, aes(x=as.factor(SiteYear), y=AV, fill = Stock))+
   geom_bar(position="identity", stat="identity")+
   geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
   geom_hline(yintercept=0)+
-  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-300,600))+ #abs to remove negative values on y-axis below 0
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-300,300))+ #abs to remove negative values on y-axis below 0
   scale_fill_manual(values = c("darkgreen","lightblue"))+
   xlab("Site")+ylab("")+
   ggtitle("Rehabilitated")+
@@ -105,7 +119,7 @@ plot_Rehabilitated <- ggplot(ab_Rehabilitated, aes(x=as.factor(SiteYear_old), y=
         legend.position = "none",
         legend.text = element_text(size = 9),
         legend.title = element_text(face = "italic", size=10),
-        plot.title = element_text(hjust = 0.9,lineheight=1.2, face="bold",size=20))
+        plot.title = element_text(hjust = 0.5,lineheight=1.2, face="bold",size=20))
 
 plot_Rehabilitated
 
@@ -116,7 +130,7 @@ plot_Established <- ggplot(ab_Remnant, aes(x=Site_short_old, y=AV, fill = Stock)
   geom_bar(position="identity", stat="identity")+
   geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
   geom_hline(yintercept=0)+
-  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-300,600))+ #abs to remove negative values on y-axis below 0
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-300,300))+ #abs to remove negative values on y-axis below 0
   scale_fill_manual(values = c("darkgreen","lightblue"))+
   xlab("Site") + ylab("")+
   ggtitle("Established")+
@@ -132,10 +146,10 @@ plot_Established <- ggplot(ab_Remnant, aes(x=Site_short_old, y=AV, fill = Stock)
 plot_Established
 
 grid.arrange(plot_Converted, plot_Rehabilitated, plot_Established,
-             ncol = 3)
+             ncol = 3) #(part A of Figure 2)
 
 
-#Plot BOXPLOT Soil C-stock down to 50cm (partB)=======
+#Plot BOXPLOT Soil C-stock down to 50cm (part B of Figure 2)=======
 soil_50cm <- select(NewDATA, Site, Site_short,Site_Core, Treatment,Depth_to, Depth_Range,
                     Site_Core,Treatment2,CarbonStock.Mgha,Lab_Compaction_Correction_Value)%>%
   filter  (Treatment != "Saltmarsh_natural") %>%
