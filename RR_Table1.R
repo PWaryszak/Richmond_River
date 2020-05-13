@@ -35,12 +35,12 @@ NewDATA2 <- left_join (NewDATA, SiteTreat, by = "Site") %>%
 
 #Soil Carbon Per Stand Age in Rehabilitated cores only:
 Rehabilitated_soil <- NewDATA2 %>%
-  select( Treatment,SiteYear, CarbonStockTillRehab_Mgha, Site_Core, Site, SiteRenamed)  %>%
+  select( Treatment,SiteYearNumeric, CarbonStockTillRehab_Mgha, Site_Core, Site, SiteRenamed)  %>%
   filter (SiteRenamed == "Rehabilitated") %>%  #filter to look at rehab sites only
   filter  (Treatment != "Saltmarsh_natural") %>%
-  group_by(Site, SiteYear, SiteRenamed, Site_Core) %>% #grouping by core
+  group_by(Site, SiteYearNumeric, SiteRenamed, Site_Core) %>% #grouping by core
   summarise(TotalCarbonStockPerCore = sum(CarbonStockTillRehab_Mgha,na.rm=T))%>% #Add-up all slices 
-  mutate(Soil_Stand_Age = 2017 - as.numeric((as.character(SiteYear))),
+  mutate(Soil_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))),
          Soil_Stock_Per_Year = TotalCarbonStockPerCore/Soil_Stand_Age )
 
 #Compute mean +-SE for each site from Rehabilitated_soil:
@@ -57,8 +57,8 @@ av_stand_age_soil <- select(Rehabilitated_soil, Site, Soil_Stock_Per_Year,TotalC
             SE_stock = round(SD_stock/sqrt(N_stock),1))
 
 
-#Sites need merging with site descriptors such as SiteYear:
-merge_year <- select(SiteTreat, Site,SiteYear)
+#Sites need merging with site descriptors such as SiteYearNumeric:
+merge_year <- select(SiteTreat, Site,SiteYearNumeric)
 
 
 ############PLANTS:
@@ -68,7 +68,7 @@ Rehabilitated_plant <- select (aa, Site,Subplot_Name, Treatment2, Total_Abovegro
   left_join(merge_year,by = "Site") %>%
   mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10,  #1 kg/100m2 = 0.1 tonnes/ha
          Plant_C = 0.464* Total_Aboveground_Biomass_Mg_ha) %>% #%>%  #1 kg/100m2 = 0.1 tonnes/ha
-  mutate(Plant_Stand_Age = 2017 - as.numeric((as.character(SiteYear))),
+  mutate(Plant_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))),
          Plant_Stock_Per_Year = Plant_C/Plant_Stand_Age,
          Site_Core = Subplot_Name) #Adding Site-Core column to match belowground data 
 
@@ -148,16 +148,16 @@ View(av_soil_plant_stock2)
 
 
 #TABLE1_Established sites part:=====
-merge_year <- select(SiteTreat, Site,SiteYear)
+merge_year <- select(SiteTreat, Site,SiteYearNumeric)
 
 #Soil Carbon Per Stand Age in Established cores only:
 soil_Established <- NewDATA2 %>%
-  select( Treatment,SiteYear, CarbonStockTillRehab_Mgha, Site_Core, Site, SiteRenamed)  %>%
+  select( Treatment,SiteYearNumeric, CarbonStockTillRehab_Mgha, Site_Core, Site, SiteRenamed)  %>%
   filter (SiteRenamed == "Established") %>%  #filter to look at rehab sites only
   filter  (Treatment != "Saltmarsh_natural") %>%
-  group_by(Site, SiteYear, SiteRenamed, Site_Core) %>% #grouping by core
+  group_by(Site, SiteYearNumeric, SiteRenamed, Site_Core) %>% #grouping by core
   summarise(TotalCarbonStockPerCore = sum(CarbonStockTillRehab_Mgha,na.rm=T))%>% #Add-up all slices 
-  mutate(Soil_Stand_Age = 2017 - as.numeric((as.character(SiteYear))),
+  mutate(Soil_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))),
          Soil_Stock_Per_Year = TotalCarbonStockPerCore/Soil_Stand_Age )
 
 #Plant Carbon Per Stand Age in Established cores only:
@@ -166,7 +166,7 @@ plant_Established <- select (aa, Site,Subplot_Name, Treatment2, Total_Abovegroun
   left_join(merge_year,by = "Site") %>%
   mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10,  #1 kg/100m2 = 0.1 tonnes/ha
          Plant_C = 0.464* Total_Aboveground_Biomass_Mg_ha) %>% #%>%  #1 kg/100m2 = 0.1 tonnes/ha
-  mutate(Plant_Stand_Age = 2017 - as.numeric((as.character(SiteYear))),
+  mutate(Plant_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))),
          Plant_Stock_Per_Year = Plant_C/Plant_Stand_Age,
          Site_Core = Subplot_Name) #Adding Site-Core column to match belowground data 
 
