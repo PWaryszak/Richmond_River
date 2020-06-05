@@ -11,7 +11,7 @@ library(apaTables) #For producing Anova-style tables in Word off lm and aov
 aa <- read.csv("RR_Plant.csv") #Ex aboveground.csv
 bb <- read.csv("RR_Soil.csv") #Ex belowground.csv
 SiteTreat <- read.csv("RR_SiteTreatment_PC.csv")##list sites and corresponding treatments
-NewTreatNames <- select(SiteTreat, Site, SiteRenamed)
+NewTreatNames <- select(SiteTreat, Site, SiteRenamed,SiteYearNumeric)
 
 
 #Plant biomass & carbon model:=========
@@ -27,34 +27,14 @@ Plant_CarbonStock$Ecosystem <- droplevels(Plant_CarbonStock$Ecosystem)#drop Dist
 Plant_CarbonStock$Ecosystem <- factor(Plant_CarbonStock$Ecosystem, levels = c("Rehabilitated","Established"))#Relevel to move Rehabilitated to intercept on plant_carbon_model
 levels(Plant_CarbonStock$Ecosystem)# "Rehabilitated" "Established" 
 
-#Model Plant_C~Ecosystem+Site:=====
+#Model Plant_C~Ecosystem + (1|Site):=====
 Plant_C_model <- lmer(Plant_C ~ Ecosystem + (1|Site), data = Plant_CarbonStock)
 summary(Plant_C_model)
 #                     Estimate Std. Error     df t value Pr(>|t|)
 #(Intrct="Rehabilitated"49.413     16.621  7.048   2.973   0.0206
 #Ecosystem= Established 96.444     28.740  7.002   3.356   0.0121
 
-#Word Table: Site Effect on Plant_C :
-plant_site_model <- lm (Plant_C ~ Site, data = Plant_CarbonStock)
-#Produce ANOVA-style output table in Word:
-options(contrasts = c("contr.sum", "contr.poly"))#in aov Compare to overall mean: https://www.dummies.com/programming/r/how-to-set-the-contrasts-for-your-data-with-r/
-#apa.reg.table(plant_site_model, filename="PLANT_AOV_SiteEffects.doc")
-
-
-#CAR: Model Plant_C ~ Stand_Age, with zero intercept:===========
-Plant_CarbonStock2 <-left_join(Plant_CarbonStock, SiteTreat, by = "Site") %>%
-  mutate(Stand_Age = 2017 - as.numeric(as.character(SiteYear))) %>%
-  select(Ecosystem, Plant_C, Stand_Age) 
-
-plant_CAR_model <- lm(Plant_C~ 0+Stand_Age , data = Plant_CarbonStock2)
-summary(plant_CAR_model )
-tab_model(plant_CAR_model)
-
-plot(Plant_C ~ Stand_Age, data = Plant_CarbonStock2, xlim=c(0,100),ylim=c(0,300))
-abline(lm(Plant_C ~ 0+ Stand_Age, data = Plant_CarbonStock2),lwd=4,col='red')
-
-
-#Model Soil_C ~ Ecosystem till 1m deep:====
+#Model Soil_C ~ Ecosystem+ (1|Site), till 1m deep:====
 #Compute Mean corrected soil C-stock accounting for compaction using Compaction Correction Value.
 NewDATA <- bb
 NewDATA$C_percent <- ifelse(NewDATA$C_perc == 0, 0.001, NewDATA$C_perc)#convert 0 into 0.001 to run log-models if any
@@ -78,10 +58,12 @@ Soil_CarbonStock <- select(NewDATA, Site, Site_short,Site_Core, Treatment,Depth_
   mutate (Stock = "Soil") %>% #Assigning additional category, indicatig it is soil stock
   group_by(Site_Core) %>% #grouping by core till 100 cm
   summarise(Soil_C = sum(CarbonStock.Mgha, na.rm = T))%>% #Add-up all slices 
-  separate(Site_Core, into = c("Site","CoreNumber"), sep = "_", remove = F)#Separate Site from core
+  separate(Site_Core, into = c("Site","CoreNumber"), sep = "_", remove = F) #Separate Site from core
 
 soil_carbon <- left_join(Soil_CarbonStock, SiteTreat, by = "Site" )
 soil_carbon$Ecosystem <- soil_carbon$SiteRenamed
+#write.csv(soil_carbon, file = "soil_C_sites.csv", row.names = F)
+
 soil_carbon2 <- filter(soil_carbon, SiteRenamed != "Rehabilitated") #Compare 2 sites only: Converted to Established.
 levels(droplevels(soil_carbon2$Ecosystem))#"Converted"   "Established"
 
@@ -94,6 +76,43 @@ summary(Soil_C_model)
 anova(Soil_C_model)
 mean((residuals(Soil_C_model))^2)#Mean Square Residuals
 
+#Site Effects Table=====
+#Word Table: Site Effect on Plant_C :
+plant_site_model <- lm (Plant_C ~ Site, data = Plant_CarbonStock)
+summary(plant_site_model)
+#Produce ANOVA-style output table in Word:
+options(contrasts = c("contr.sum", "contr.poly"))#in aov Compare to overall mean: https://www.dummies.com/programming/r/how-to-set-the-contrasts-for-your-data-with-r/
+#apa.reg.table(plant_site_model, filename="StatsTable_PLANT_SiteEffects.doc")
+
+#Word Table: Site Effect on Soil_C :
+s <- read.csv( "soil_C_sites.csv")#There was a glitch,I had export and import these data to make lm work
+Soil_site_model <- lm (Soil_C ~ Site, data = s)
+summary(Soil_site_model)
+#Produce ANOVA-style output table in Word:
+library(apaTables) #For producing Anova-style tables in Word off lm and aov
+options(contrasts = c("contr.sum", "contr.poly"))#in aov Compare to overall mean: https://www.dummies.com/programming/r/how-to-set-the-contrasts-for-your-data-with-r/
+apa.reg.table(Soil_site_model, filename="StatsTable_Soil_SiteEffects.doc")
+
+
+
+#Draw Table for Plan_C and Soil_C models:========
+
+tab_model(Plant_C_model,Soil_C_model,show.df = T,show.stat =T,
+          show.icc = F, show.se = T) #Draw a output Table
+#Plant_C_model = Established + Rehab
+#Soil_C_model = Established + Converted
+
+#CAR: Model Plant_C ~ Stand_Age, with zero intercept:===========
+Plant_CarbonStock2 <-left_join(Plant_CarbonStock, SiteTreat, by = "Site") %>%
+  mutate(Stand_Age = 2017 - as.numeric(as.character(SiteYear))) %>%
+  select(Ecosystem, Plant_C, Stand_Age) 
+
+plant_CAR_model <- lm(Plant_C~ 0+Stand_Age , data = Plant_CarbonStock2)
+summary(plant_CAR_model )
+tab_model(plant_CAR_model)
+
+plot(Plant_C ~ Stand_Age, data = Plant_CarbonStock2, xlim=c(0,100),ylim=c(0,300))
+abline(lm(Plant_C ~ 0+ Stand_Age, data = Plant_CarbonStock2),lwd=4,col='red')
 
 #CAR: Model Soil_C ~ Stand_Age, with zero intercept (Rehab + Established):===========
 #Compute total C-stock per core:
@@ -116,7 +135,11 @@ Soil_CarbonStock2 <-left_join(soil_carbon2, NewTreatNames, by = "Site")%>%
   mutate(Stand_Age = 2017 - as.numeric(as.character(SiteYear))) %>%
   select(Ecosystem, Soil_C, Stand_Age) 
 
-#Estimate CAR (Carbon Acrretion Rate) in soil:
+
+
+
+
+#Estimate CAR (Carbon Acrretion Rate) in soil:==============
 Soil_CAR_model <- lm(Soil_C~ 0+Stand_Age , data = Soil_CarbonStock2)
 summary(Soil_CAR_model )
 tab_model(Soil_CAR_model)
@@ -125,8 +148,41 @@ plot(Soil_C ~ Stand_Age, data = Soil_CarbonStock2, xlim=c(0,100),ylim=c(0,300))
 abline(lm(Soil_C ~ 0+ Stand_Age, data = Soil_CarbonStock2),lwd=4,col='red')
 
 
-#Draw Table for Plan_C and Soil_C models:========
+# Rehab Soil CAR-Model (Carbon Accretion Rate)======
+#Estimate CarbonStockTillRehab_Mgha based on Stand_Age and soil C-stock till Depth of Rehab (DepthTo_SinceRehabilitated_cm)
+#Some Sites, e.g., MRCH1 was too mixed to age-date hence "DepthTo_SinceRehabilitated_cm," is unavailable
+NewDATA2 <- left_join (NewDATA, SiteTreat, by = "Site") %>%
+  mutate(KeepThrow = ifelse(DepthTo_SinceRehabilitated_cm >= Depth_from, "keep", "throw")) %>% #keep slices data are > Depth_from
+  filter(KeepThrow=="keep") %>% #keep the "keep"
+  transform (DepthAtRehab_cm = ifelse(Depth_to <= DepthTo_SinceRehabilitated_cm,  #Cut to the length of DepthTo_SinceRehabilitated_cm
+                                      Depth_to, DepthTo_SinceRehabilitated_cm)) %>%
+  mutate (SliceAtRehab_cm = DepthAtRehab_cm - Depth_from) %>% #lenght of slice at cores up to DepthTo_SinceRehabilitated_cm
+  mutate (CarbonStockTillRehab_Mgha = CarbonDensity.gcm3  * 100 * SliceAtRehab_cm) #Soilc C stock in each cores till DepthTo_SinceRehabilitated_cm
 
-tab_model(Plant_C_model,Soil_C_model, show.icc = F,show.df = T) #Draw a output Table
-#Plant_C_model = Established + Rehab
-#Soil_C_model = Established + Converted
+CAR_soil <- NewDATA2 %>%
+  select( Treatment,SiteYearNumeric, CarbonStockTillRehab_Mgha, Site_Core, Site, SiteRenamed)  %>%
+  #filter (SiteRenamed == "Rehabilitated") %>%  #filter to look at rehab sites only
+  filter  (Treatment != "Saltmarsh_natural") %>%
+  group_by(Site, SiteYearNumeric, SiteRenamed, Site_Core) %>% #grouping by core
+  summarise(TotalCarbonStockPerCore = sum(CarbonStockTillRehab_Mgha,na.rm=T))%>% #Add-up all slices 
+  mutate(Soil_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))),
+         Soil_Stock_Per_Year = TotalCarbonStockPerCore/Soil_Stand_Age )
+
+CAR_soil_model <- lmer(Soil_Stock_Per_Year~SiteRenamed + (1|Site), data = CAR_soil)
+tab_model(CAR_soil_model,show.df = T,show.stat =T,
+          show.icc = F, show.se = T) #Draw a output Table
+
+
+#Plant CAR-Model (Carbon Accretion Rate)======
+CAR_plant <- select (aa, Site,Subplot_Name, Treatment2, Total_Aboveground_Biomass_kg_100m2) %>%
+  left_join(NewTreatNames, by = "Site") %>%
+  #left_join(merge_year,by = "Site") %>%
+  mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10,  #1 kg/100m2 = 0.1 tonnes/ha
+         Plant_C = 0.464* Total_Aboveground_Biomass_Mg_ha) %>% #%>%  #1 kg/100m2 = 0.1 tonnes/ha
+  mutate(Plant_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))),
+         Plant_Stock_Per_Year = Plant_C/Plant_Stand_Age,
+         Site_Core = Subplot_Name) #Adding Site-Core column to match belowground data 
+
+CAR_plant_model <- lmer(Plant_Stock_Per_Year~SiteRenamed + (1|Site), data = CAR_plant)
+tab_model(CAR_plant_model,show.df = T,show.stat =T,
+          show.icc = F, show.se = T) #Draw a output Table
