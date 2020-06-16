@@ -12,73 +12,10 @@ bb <- read.csv("RR_Soil.csv") #All Data
 SiteTreat <- read.csv("RR_SiteTreatment_PC.csv")# Treatments to join to All Data
 bb <- bb %>%  filter(Treatment != "Saltmarsh_natural")#Remove this habitat, not assessed
 bb$Site <- factor(bb$Site) #Remove the extra factor level of SNND
-
-#Create dataset off Pere's file above. MAR's units = g/cm2/y
-MAR <- data.frame( Site = c("MNND","SNND","MNDC","MDBP",
-                            "MDSD","MR1991","MR1992","MRAP",
-                            "MRCH1","MRCH2","MRPL","MDTUCK", "MNPL"),
-                   MAR = c(0.095, 0.096, NA,     0, 
-                           0,    0.0324 ,0.076,0.32,
-                           NA,  0.16,NA, NA   ,0.045),
-                   MAR_SE = c(0.008,0.016, NA, 0,
-                              0, 0.0010,0.005,0.11,
-                              NA,0.02,NA, NA, 0.002))
-
-#Join Sites with MAR data:
-SiteTreatMAR <- left_join(SiteTreat,MAR, by = "Site")
-SiteTreatMAR#list sites and corresponding treatments
-
-#Correct Soil data for compaction and #Compute corrected C-stock (Off Bulk Density):
-NewDATA <- bb
-NewDATA$C_percent <- ifelse(NewDATA$C_perc == 0, 0.001, NewDATA$C_perc)#convert 0 into 0.001 to run log-models if any
-NewDATA$SliceLength.cm <- (NewDATA$Depth_to - NewDATA$Depth_from) #cm
-NewDATA$PipeDiameter.cm <- 5 #Diameter of coring pipes was 5 cm
-NewDATA$SampleVolume.cm3 <- (pi*(NewDATA$PipeDiameter.cm/2)^2)*NewDATA$SliceLength.cm  #slice volume
-NewDATA$dry_bulk_density.gcm3_corrected <- NewDATA$Dry_bulk_density_gcm3 * NewDATA$Lab_Compaction_Correction_Value
-NewDATA$CarbonDensity.gcm3 <- NewDATA$dry_bulk_density.gcm3_corrected * NewDATA$C_percent/100
-NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$SliceLength.cm )
-
-#Compute Carbon Accretion Rate at Rehabilitated and Established sites:
-CAR_Rehabiliated <-
-  left_join(bb,SiteTreatMAR, by = "Site") %>%
-  select(C_perc, Site, Site_Core, MAR, MAR_SE, SiteRenamed,SiteYearNumeric) %>%
-  mutate(CAR_gcm2y = (C_perc/100) * MAR *100) %>%# *100 to conver to tonnes per ha
-  mutate (Stock = "Belowground") %>%
-  filter(SiteRenamed != "Converted") %>%
-  group_by(Site,SiteYearNumeric,SiteRenamed,) %>%
-  summarise(Mean_CAR = weighted.mean (CAR_gcm2y, na.rm=T),
-            N_CAR = length (CAR_gcm2y),
-            SD_CAR =sd (CAR_gcm2y, na.rm=T),
-            SE_CAR =sd (CAR_gcm2y, na.rm=T)/sqrt(N_CAR)) %>%
-  mutate(MyColor = ifelse(Site=="MRCH1", "lightgrey","black" )) #change MRCH1 Aegiceras-dominated site to grey
-
-#PLOT CAR:======
-burial_plot <- ggplot(CAR_Rehabiliated, aes(x= 2017-as.numeric(as.character(SiteYearNumeric)),y= Mean_CAR, color = MyColor)) +
-  geom_point(aes(shape = SiteRenamed, color=MyColor),size = 3) +
-  scale_colour_manual(values = CAR_Rehabiliated[["MyColor"]])+ #change MRCH1 Aegiceras-dominated site to grey
-  geom_errorbar( aes(ymin = Mean_CAR + SE_CAR,
-                     ymax = Mean_CAR - SE_CAR), width=.2)+
-  scale_x_continuous(limits = c(0, 100))+
-  labs(x= "Stand age (years)", y = bquote('Soil C burial rate  ' (Mg*~ha^-1~year^-1)))+
-  geom_hline(yintercept=0.3958711, linetype = 2)+
-  theme_bw() +
-  theme(axis.text.x = element_text(size = 14, color = "black",angle = 90),
-        axis.text.y = element_text(size = 14, color = "black"),
-        axis.title.y = element_text(size = 14),
-        axis.title.x = element_text(size = 14),
-        legend.position = "none")
-
-#Find MIN/MAX CAR for Established site grey shade if needed:
-Remnant_CarMax <- as.numeric(CAR_Rehabiliated[3,"Mean_CAR"])
-Remnant_CarMin <- as.numeric(CAR_Rehabiliated[2,"Mean_CAR"])
-#+ Add grey area with annotate below if needed again:
-# annotate("rect", xmin = -Inf, xmax = Inf, ymin = Remnant_CarMax , ymax = Remnant_CarMin , fill = "lightgrey", alpha = .4)
-
-burial_plot
-
-
-#PLOT Plant ======
 SitesToMerge <- select(SiteTreat, Site, SiteYearNumeric)#We need descriptors for sites from SiteTreat file.
+
+
+#Plant_C ======
 
 Plant_Carbon<- select (aa, Site, Treatment2, Total_Aboveground_Biomass_kg_100m2) %>%
   # filter(Treatment2 == "Rehabilitated") %>%
@@ -111,14 +48,14 @@ Plant_Carbon_plot <- ggplot(Plant_Carbon,aes(x= 2017-as.numeric(as.character(Sit
   scale_colour_manual(values = Plant_Carbon[["MyColor"]])+ #change Aegiceras-dominated site to grey
   geom_errorbar( aes(ymin = AV + SE,
                      ymax = AV - SE), width=.2)+
-  scale_x_continuous(limits = c(0, 100))+
+  scale_x_continuous(limits = c(0, 100), breaks = seq(0,100, by=25), labels = MyLabels)+
   scale_y_continuous(limits = c(0, 250))+
   labs(x= "Stand age (years)", shape = "Site Type: ",
-       y = bquote('Plant C-stock since rehabiliatation'~~(Mg*~ha^-1)))+
+       y = bquote('Plant C-stock since rehabiliatation'~~(t~C*~ha^-1)))+
   geom_hline(yintercept= Remnant_plant_intercept , linetype = 2)+
   guides(color = FALSE) +
   theme_bw() +
-  theme(axis.text.x = element_text(size = 14, color = "black",angle = 90),
+  theme(axis.text.x = element_text(size = 14, color = "black"),
         axis.text.y = element_text(size = 14, color = "black"),
         axis.title.y = element_text(size = 14),
         axis.title.x = element_text(size = 14),
@@ -139,7 +76,16 @@ MyMax3 <- as.numeric(Plant_Carbon[1,"AV"])
 #annotate("rect", xmin = -Inf, xmax = Inf, ymin = MyMin3, ymax = MyMax3, fill = "lightgrey", alpha = .4)
 
 
-#PLOT Soil:========
+#Soil_C:========
+NewDATA <- bb
+NewDATA$C_percent <- ifelse(NewDATA$C_perc == 0, 0.001, NewDATA$C_perc)#convert 0 into 0.001 to run log-models if any
+NewDATA$SliceLength.cm <- (NewDATA$Depth_to - NewDATA$Depth_from) #cm
+NewDATA$PipeDiameter.cm <- 5 #Diameter of coring pipes was 5 cm
+NewDATA$SampleVolume.cm3 <- (pi*(NewDATA$PipeDiameter.cm/2)^2)*NewDATA$SliceLength.cm  #slice volume
+NewDATA$dry_bulk_density.gcm3_corrected <- NewDATA$Dry_bulk_density_gcm3 * NewDATA$Lab_Compaction_Correction_Value
+NewDATA$CarbonDensity.gcm3 <- NewDATA$dry_bulk_density.gcm3_corrected * NewDATA$C_percent/100
+NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$SliceLength.cm )
+
 #C-stock (Stand Age) till Depth of Rehab (DepthTo_SinceRehabilitated_cm)
 NewDATA2 <- left_join (NewDATA, SiteTreat, by = "Site") %>%
   mutate(KeepThrow = ifelse(DepthTo_SinceRehabilitated_cm >= Depth_from, "keep", "throw")) %>% #keep slices data are > Depth_from
@@ -200,13 +146,13 @@ soil_till_rehab_plot <- ggplot(soil_stock_till_rehab,
   scale_colour_manual(values = soil_stock_till_rehab[["MyColor"]])+ #change two Aegiceras-dominated site to grey
   geom_errorbar( aes(ymin = AV + SE,
                      ymax = AV - SE), width=.2)+
-  scale_x_continuous(limits = c(0, 100))+
+  scale_x_continuous(limits = c(0, 100), breaks = seq(0,100, by=25), labels = MyLabels)+
   scale_y_continuous(limits = c(0, 150))+
   labs(x= "Stand age (years)", shape = "Site Type: ",
-       y = bquote('Soil C-stock since rehabiliatation  ' (Mg*~ha^-1)))+
+       y = bquote('Soil C-stock since rehabiliatation  ' (t~C*~ha^-1)))+
   geom_hline(yintercept= Remnant_intercept , linetype = 2)+
   theme_bw() +
-  theme(axis.text.x = element_text(size = 14, color = "black",angle = 90),
+  theme(axis.text.x = element_text(size = 14, color = "black"),
         axis.text.y = element_text(size = 14, color = "black"),
         axis.title.y = element_text(size = 14),
         axis.title.x = element_text(size = 14),
@@ -217,11 +163,165 @@ soil_till_rehab_plot <- ggplot(soil_stock_till_rehab,
         plot.title = element_text(size = 20, face = "bold", vjust = 0.5),
         strip.background =  element_rect(fill = "white"))
 
+
+#NEW SOIL CAR:=======
+#New because we used stock to horizon / Stand_Age = way to go
+#Correct Soil data for compaction and #Compute corrected C-stock (Off Bulk Density):
+NewDATA <- bb
+NewDATA$C_percent <- ifelse(NewDATA$C_perc == 0, 0.001, NewDATA$C_perc)#convert 0 into 0.001 to run log-models if any
+NewDATA$SliceLength.cm <- (NewDATA$Depth_to - NewDATA$Depth_from) #cm
+NewDATA$PipeDiameter.cm <- 5 #Diameter of coring pipes was 5 cm
+NewDATA$SampleVolume.cm3 <- (pi*(NewDATA$PipeDiameter.cm/2)^2)*NewDATA$SliceLength.cm  #slice volume
+NewDATA$dry_bulk_density.gcm3_corrected <- NewDATA$Dry_bulk_density_gcm3 * NewDATA$Lab_Compaction_Correction_Value
+NewDATA$CarbonDensity.gcm3 <- NewDATA$dry_bulk_density.gcm3_corrected * NewDATA$C_percent/100
+NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$SliceLength.cm )
+
+#Compute Soil_CAR (Stock to Rehab Horizon / Stand_Age):
+NewDATA2 <- left_join (NewDATA, SiteTreat, by = "Site") %>%
+  mutate(KeepThrow = ifelse(DepthTo_SinceRehabilitated_cm >= Depth_from, "keep", "throw")) %>% #keep slices data are > Depth_from
+  filter(KeepThrow=="keep") %>% #keep the "keep"
+  transform (DepthAtRehab_cm = ifelse(Depth_to <= DepthTo_SinceRehabilitated_cm,  #Cut to the length of DepthTo_SinceRehabilitated_cm
+                                      Depth_to, DepthTo_SinceRehabilitated_cm)) %>% #Keep slice below horizon, if above horizon cut to horizon depth
+  mutate (SliceAtRehab_cm = DepthAtRehab_cm - Depth_from) %>% #lenght of slice at cores up to DepthTo_SinceRehabilitated_cm
+  mutate (CarbonStockTillRehab_Mgha = CarbonDensity.gcm3  * 100 * SliceAtRehab_cm) #Soilc C stock in each cores till DepthTo_SinceRehabilitated_cm
+
+
+CAR_Rehab_Established <- NewDATA2 %>%
+  select (Treatment,SiteYearNumeric, CarbonStockTillRehab_Mgha, Site_Core, Site, SiteRenamed)  %>%
+  filter  (Treatment != "Saltmarsh_natural") %>%
+  group_by(Site, SiteYearNumeric, SiteRenamed, Site_Core) %>% #grouping by core
+  summarise(SoilStockTillRehabHorizon = sum(CarbonStockTillRehab_Mgha,na.rm=T))%>% #Add-up all slices per core
+  mutate(Soil_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))), #Compute Stand_Age
+         CAR_MgHaYear = SoilStockTillRehabHorizon/Soil_Stand_Age ) %>%  #Compute CAR (Soil_CAR)
+  mutate(MyColor = ifelse(Site=="MRCH1", "lightgrey","black" )) %>% #change MRCH1 Aegiceras-dominated site to grey if present
+  
+  group_by(Site,SiteYearNumeric,SiteRenamed) %>%
+  summarise(Mean_CAR = weighted.mean (CAR_MgHaYear, na.rm=T),
+            N_CAR = length (CAR_MgHaYear),
+            SD_CAR =sd (CAR_MgHaYear, na.rm=T),
+            SE_CAR =sd (CAR_MgHaYear, na.rm=T)/sqrt(N_CAR)) %>%
+  mutate(MyColor = ifelse(Site=="MRCH1", "lightgrey","black" )) %>% #change MRCH1 Aegiceras-dominated site to grey
+  mutate(Stand_Age = 2017-as.numeric(as.character(SiteYearNumeric))) %>%
+  select(SiteYearNumeric, Mean_CAR,SiteRenamed,MyColor,SE_CAR,Stand_Age  )
+
+#PLOT CAR:
+MyLabels <- c(0,25,50,75, ">100") #Define labels for x-axis
+
+burial_plot <- ggplot(CAR_Rehab_Established, aes(x= Stand_Age,y= Mean_CAR, color = MyColor)) +
+  geom_point(aes(shape = SiteRenamed, color=MyColor),size = 3) +
+  scale_colour_manual(values = CAR_Rehabiliated[["MyColor"]])+ #change MRCH1 Aegiceras-dominated site to grey
+  geom_errorbar( aes(ymin = Mean_CAR + SE_CAR,
+                     ymax = Mean_CAR - SE_CAR), width=.2)+
+  scale_x_continuous(limits = c(0, 100), breaks = seq(0,100, by=25), labels = MyLabels)+
+  labs(x= "Stand age (years)", y = bquote('Soil C burial rate  ' (t~C*~ha^-1~year^-1)))+
+  geom_hline(yintercept=0.3958711, linetype = 2)+ #mean of CARs at Established sites
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 14, color = "black"),
+        axis.text.y = element_text(size = 14, color = "black"),
+        axis.title.y = element_text(size = 14),
+        axis.title.x = element_text(size = 14),
+        legend.position = "none")
+
+#Find MIN/MAX CAR for Established site grey shade if needed:
+Remnant_CarMax <- as.numeric(CAR_Rehabiliated[3,"Mean_CAR"])
+Remnant_CarMin <- as.numeric(CAR_Rehabiliated[2,"Mean_CAR"])
+#+ Add grey area with annotate below if needed again:
+# annotate("rect", xmin = -Inf, xmax = Inf, ymin = Remnant_CarMax , ymax = Remnant_CarMin , fill = "lightgrey", alpha = .4)
+
+burial_plot
+
+
+
+
+
+
+
+
 #Plot Combined Plant/Soil Stock and CAR:=======
-grid.arrange(Plant_Carbon_plot,soil_till_rehab_plot,burial_plot,
+grid.arrange(Plant_Carbon_plot, soil_till_rehab_plot, burial_plot,
              ncol = 3)
 
 #To save in higher resolution use arrangeGrob:
 plots <- arrangeGrob(Plant_Carbon_plot,soil_till_rehab_plot,burial_plot, nrow=1)
-#ggsave(plots, filename = "Fig3_600DPI.png",  width = 15, height = 6, dpi = 600)
+ggsave(plots, filename = "Fig3_600DPI_HorizonBased2.png",  width = 15, height = 6, dpi = 600)
+
+
+
+
+
+
+
+
+
+
+
+
+#OLD CAR:=======
+#(needs fixing-up: get stock to horizon, not entire core)
+
+
+#Create dataset off Pere's file above. MAR's units = g/cm2/y
+MAR <- data.frame( Site = c("MNND","SNND","MNDC","MDBP",
+                            "MDSD","MR1991","MR1992","MRAP",
+                            "MRCH1","MRCH2","MRPL","MDTUCK", "MNPL"),
+                   MAR = c(0.095, 0.096, NA,     0, 
+                           0,    0.0324 ,0.076,0.32,
+                           NA,  0.16,NA, NA   ,0.045),
+                   MAR_SE = c(0.008,0.016, NA, 0,
+                              0, 0.0010,0.005,0.11,
+                              NA,0.02,NA, NA, 0.002))
+
+#Join Sites with MAR data:
+SiteTreatMAR <- left_join(SiteTreat,MAR, by = "Site")
+SiteTreatMAR#list sites and corresponding treatments
+
+#Correct Soil data for compaction and #Compute corrected C-stock (Off Bulk Density):
+NewDATA <- bb
+NewDATA$C_percent <- ifelse(NewDATA$C_perc == 0, 0.001, NewDATA$C_perc)#convert 0 into 0.001 to run log-models if any
+NewDATA$SliceLength.cm <- (NewDATA$Depth_to - NewDATA$Depth_from) #cm
+NewDATA$PipeDiameter.cm <- 5 #Diameter of coring pipes was 5 cm
+NewDATA$SampleVolume.cm3 <- (pi*(NewDATA$PipeDiameter.cm/2)^2)*NewDATA$SliceLength.cm  #slice volume
+NewDATA$dry_bulk_density.gcm3_corrected <- NewDATA$Dry_bulk_density_gcm3 * NewDATA$Lab_Compaction_Correction_Value
+NewDATA$CarbonDensity.gcm3 <- NewDATA$dry_bulk_density.gcm3_corrected * NewDATA$C_percent/100
+NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$SliceLength.cm )
+
+#Compute Carbon Accretion Rate at Rehabilitated and Established sites:
+CAR_Rehabiliated <-
+  left_join(bb,SiteTreatMAR, by = "Site") %>%
+  select(C_perc, Site, Site_Core, MAR, MAR_SE, SiteRenamed,SiteYearNumeric) %>%
+  mutate(CAR_MgHaYear = (C_perc/100) * MAR *100) %>%# *100 to conver to tonnes per ha
+  mutate (Stock = "Belowground") %>%
+  filter(SiteRenamed != "Converted") %>%
+  group_by(Site,SiteYearNumeric,SiteRenamed,) %>%
+  summarise(Mean_CAR = weighted.mean (CAR_MgHaYear, na.rm=T),
+            N_CAR = length (CAR_MgHaYear),
+            SD_CAR =sd (CAR_MgHaYear, na.rm=T),
+            SE_CAR =sd (CAR_MgHaYear, na.rm=T)/sqrt(N_CAR)) %>%
+  mutate(MyColor = ifelse(Site=="MRCH1", "lightgrey","black" )) #change MRCH1 Aegiceras-dominated site to grey
+
+#PLOT OLD CAR:
+
+burial_plot <- ggplot(CAR_Rehabiliated, aes(x= 2017-as.numeric(as.character(SiteYearNumeric)),y= Mean_CAR, color = MyColor)) +
+  geom_point(aes(shape = SiteRenamed, color=MyColor),size = 3) +
+  scale_colour_manual(values = CAR_Rehabiliated[["MyColor"]])+ #change MRCH1 Aegiceras-dominated site to grey
+  geom_errorbar( aes(ymin = Mean_CAR + SE_CAR,
+                     ymax = Mean_CAR - SE_CAR), width=.2)+
+  scale_x_continuous(limits = c(0, 100))+
+  labs(x= "Stand age (years)", y = bquote('Soil C burial rate  ' (t~C*~ha^-1~year^-1)))+
+  geom_hline(yintercept=0.3958711, linetype = 2)+
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 14, color = "black"),
+        axis.text.y = element_text(size = 14, color = "black"),
+        axis.title.y = element_text(size = 14),
+        axis.title.x = element_text(size = 14),
+        legend.position = "none")
+
+#Find MIN/MAX CAR for Established site grey shade if needed:
+Remnant_CarMax <- as.numeric(CAR_Rehabiliated[3,"Mean_CAR"])
+Remnant_CarMin <- as.numeric(CAR_Rehabiliated[2,"Mean_CAR"])
+#+ Add grey area with annotate below if needed again:
+# annotate("rect", xmin = -Inf, xmax = Inf, ymin = Remnant_CarMax , ymax = Remnant_CarMin , fill = "lightgrey", alpha = .4)
+
+burial_plot
+
 
