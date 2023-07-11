@@ -10,12 +10,13 @@ library(gridExtra)
 aa <- read.csv("RR_Plant.csv") #Ex aboveground.csv
 bb <- read.csv("RR_Soil.csv") #All Data
 SiteTreat <- read.csv("RR_SiteTreatment_PC.csv")# Treatments to join to All Data
-#We decided to split Rehabilitated site into two categories >25 and <25 years old (colun SiteRenamed_25y):
+#We decided to split Rehabilitated site into two categories >25 and <25 years old (column SiteRenamed_25y):
 SiteTreat
 
 bb <- bb %>%  filter(Treatment != "Saltmarsh_natural")#Remove this habitat, not assessed
 bb$Site <- factor(bb$Site) #Remove the extra factor level of SNND
-SitesToMerge <- select(SiteTreat, Site, SiteYearNumeric,Site_short_old)#We need descriptors for sites from SiteTreat file.
+SitesToMerge <- select(SiteTreat, Site, SiteYearNumeric,Site_short_old,
+                       DepthTo_SinceRehabilitated_cm, SiteRenamed_25y)#We need descriptors for sites from SiteTreat file.
 SitesToMerge
 
 
@@ -48,14 +49,15 @@ NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$Slice
 
 
 #Cut slices at the depth where rehab started (DepthAtRehab_cm):
-NewDATA2 <- left_join (NewDATA, SiteTreat, by = "Site") %>%
-  mutate(KeepThrow = ifelse(DepthTo_SinceRehabilitated_cm >= Depth_from, "keep", "throw")) %>% #keep slices data are > Depth_from
-  filter(KeepThrow=="keep") %>% #keep the "keep"
+NewDATA2 <- left_join (NewDATA, SitesToMerge, by = "Site") %>%
+  mutate(KeepThrow = ifelse(DepthTo_SinceRehabilitated_cm >= Depth_from, "keep", "throw"))%>% #keep slices data are > Depth_from
+  filter(KeepThrow=="keep" ) %>% #keep the "keep"
   transform (DepthAtRehab_cm = ifelse(Depth_to <= DepthTo_SinceRehabilitated_cm,  #Cut to the length of DepthTo_SinceRehabilitated_cm
                                       Depth_to, DepthTo_SinceRehabilitated_cm)) %>% #Keep slice below horizon, if above horizon cut to horizon depth
   mutate (SliceAtRehab_cm = DepthAtRehab_cm - Depth_from) %>% #lenght of slice at cores up to DepthTo_SinceRehabilitated_cm
-  mutate (CarbonStockTillRehab_Mgha = CarbonDensity.gcm3  * 100 * SliceAtRehab_cm) #Soilc C stock in each cores till DepthTo_SinceRehabilitated_cm
+  mutate (CarbonStockTillRehab_Mgha = CarbonDensity.gcm3  * 100 * SliceAtRehab_cm) #Soil C stock in each cores till DepthTo_SinceRehabilitated_cm
 
+View(NewDATA2)
 
 #Compute Soil_CAR (Stock to Rehab Horizon / Stand_Age):
 CAR_Rehab_Established <- NewDATA2 %>%
@@ -66,7 +68,7 @@ CAR_Rehab_Established <- NewDATA2 %>%
   mutate(Soil_Stand_Age = 2017 - as.numeric((as.character(SiteYearNumeric))), #Compute Stand_Age
          CAR_MgHaYear = SoilStockTillRehabHorizon/Soil_Stand_Age )  #Compute CAR (Soil_CAR)
 
-CAR_Rehab_Established
+View(CAR_Rehab_Established)
 
 CAR_Rehab_Established_short <- CAR_Rehab_Established %>% 
   select(Site,SiteYearNumeric, SiteRenamed_25y,CAR_MgHaYear ) %>%
@@ -223,7 +225,7 @@ soil_stock_till_rehab
 #write.csv(soil_till_rehab, file = "soil_till_rehab.csv", row.names = F)
 
 
-#Soil C Averages 4 Results======
+#Soil C Averages 4 Results (down to 50 cm deep)======
 NewDATA_Converted <- left_join (NewDATA, SiteTreat, by = "Site")%>%
   filter(SiteRenamed_25y =="Converted" | SiteRenamed_25y =="Established")
 
@@ -247,11 +249,12 @@ soil_stock_converted_summary <- soil_stock_converted %>%
             SE = SD/sqrt(N))
 
 soil_stock_converted_summary
+
 SiteRenamed    AV     N    SD    SE
 1 Converted    71.5     9  18.7  6.24
 2 Established 122.     12  16.9  4.88
 round(71.5/122.4 *100,1) # Converted C-stock is on average 58.6% lower than Established
-122.4- 71.5
+122.4- 71.5 #58.6% lower translates to 50.9 C-tonnes per hectare of difference.
 
 #PLOT Soil_C:
 unique(soil_stock_till_rehab$SiteRenamed_25y)#"Established","Rehabilitated_old","Rehabilitated_young"
@@ -274,7 +277,7 @@ soil_till_rehab_boxplot
 
 
 
-#Combine Plots (Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot):=======
+# Fig2:Combine Plots (Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot):=======
 grid.arrange(Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot,
              ncol = 3)
 
@@ -282,3 +285,127 @@ grid.arrange(Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot,
 plots <- arrangeGrob(Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot, nrow=1)
 ggsave(plots, filename = "Fig2_600DPI_RehabHorizonBoxplot_25y_04july2023_v2.png",  width = 17, height = 8, dpi = 600)
 
+
+----------------------------------------
+
+
+
+#Fig3: BARPLOT of Established vs Converted 50cm deep:==========
+#LOAD Richmond River DATA
+library(tidyverse)
+library(gridExtra)
+
+aa <- read.csv("RR_Plant.csv") #Ex aboveground.csv
+names(aa)
+bb <- read.csv("RR_Soil.csv") #Ex belowground.csv
+names(bb)
+
+#Soil data (50cm deep):==========
+
+#merge sites and corresponding treatments
+SiteTreat <- read.csv("RR_SiteTreatment_PC.csv")#to join Treatments to 
+SiteTreatShort <- select( SiteTreat, Site, Site_short, SiteRenamed)
+
+#Compute Mean Soil C-stock: Filter out sites down to 50cm deep:
+NewDATA_Converted <- left_join (NewDATA2, SiteTreatShort_a, by = "Site")
+
+soil_stock_50cm<- select(NewDATA_Converted, Site,Depth_to, Site_Core, Treatment,
+                               Site_Core,CarbonStock.Mgha,Site_short, SiteRenamed) %>%
+  
+  filter(Depth_to <=50) %>% # established/converted stock set to below 50 cm to enable comparison
+  
+  group_by(Site_Core, Site, Site_short, SiteRenamed) %>% #grouping by core till 50 cm deep
+  summarise(TotalCarbonStockPerCore = sum(CarbonStock.Mgha))%>% #Add-up all slices 
+  
+  separate(Site_Core, into = c("Site","CoreNumber"), sep = "_") 
+
+soil_stock_50cm
+
+soil_stock_50cm_summary <- soil_stock_50cm %>%
+  group_by(SiteRenamed,Site,Site_short) %>%
+  summarise(AV = mean(TotalCarbonStockPerCore, nr.rm=T),
+            N = n(),
+            SD = sd(TotalCarbonStockPerCore),
+            SE = SD/sqrt(N)) %>%
+  mutate (Stock = "Soil")
+
+soil_stock_50cm_summary 
+
+#Compute Plant C-Stock (mean +- SE):=========
+
+#Summarise abovegorund carbon stock:
+names(aa) #Shorten the aa file  and a missing columns as per below:
+aa_a <- left_join(aa,SiteTreatShort_a, by = "Site") #aa dataset miss SiteRenamed column. Join with SiteTreat_a
+
+plant_stock_summary<- select (aa_a, Site,  Total_Aboveground_Biomass_kg_100m2,Site_short,SiteRenamed) %>%
+  mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10 )%>% #1 kg/100m2 = 0.1 tonnes/ha
+  gather(key = treat, value = mass, Total_Aboveground_Biomass_Mg_ha) %>% 
+  group_by(Site,Site_short,SiteRenamed) %>%
+  summarise(AV=mean(mass, na.rm = T),
+            SD=sd(mass),
+            N = length(mass),
+            SE= SD / sqrt(N)) %>%
+  mutate (Stock = "Plant")
+
+plant_stock_summary
+plant_stock_summary[is.na(plant_stock_summary)] <- 0 #Replace NaN (4 Converted sites 4 plotting purpose) with zeros and join with site label (SiteTreat) dataset:
+
+#Join/Plot above and below Stocks:========
+ab <- rbind (plant_stock_summary,soil_stock_50cm_summary ) %>%
+  mutate(AV= ifelse(Stock =="Plant",AV,AV * -1))%>% #Turn soil values into negative values
+  mutate(project = "RR")
+
+ab_Disturbed <- filter(ab, SiteRenamed == "Converted") #Use this for plotting Converted sites
+ab_Disturbed
+ab_Remnant <- filter(ab, SiteRenamed == "Established")#Use this for plotting Establishedsites
+ab_Remnant
+
+#Draw figure breaks to fit data in:
+MyBreaks <- c(-150,-100, -50, 0, 100, 200,300 ,400,500,600)
+
+#Plot Disturbed Plant biomass:
+plot_Disturbed <- ggplot(ab_Disturbed, aes(x=Site_short, y=AV, fill = Stock))+
+  geom_bar(position="identity", stat="identity")+
+  geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
+  geom_hline(yintercept=0)+
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-150,600))+ #abs to remove negative values on y-axis below 0
+  scale_fill_manual(values = c("darkgreen","lightblue"))+
+  xlab("Site")+ ylab("")+
+  ggtitle("Converted")+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),
+        axis.text.y=element_text(size=12),
+        axis.title.y=element_text(size=20),
+        axis.title.x=element_text(size=20),
+        legend.position = c(.75, .85),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(face = "italic", size=14),
+        plot.title = element_text(hjust = 0.5,lineheight=1.2, face="bold",size=22))
+plot_Disturbed
+
+#Plot Remnant Plant biomass:
+plot_Remnant <- ggplot(ab_Remnant, aes(x=Site_short, y=AV, fill = Stock))+
+  geom_bar(position="identity", stat="identity")+
+  geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
+  geom_hline(yintercept=0)+
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-150,600))+ #abs to remove negative values on y-axis below 0
+  scale_fill_manual(values = c("darkgreen","lightblue"))+
+  xlab("Site") + ylab(bquote("Organic carbon stock " (Mg*~ha^-1)))+
+  ggtitle("Established")+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),
+        axis.text.y=element_text(size=12),
+        axis.title.y=element_text(size=20),
+        axis.title.x=element_text(size=20),
+        
+        legend.position = "none",
+        legend.text = element_text(size = 12),
+        legend.title = element_text(face = "italic",size=14),
+        plot.title = element_text(hjust = 0.5,lineheight=1.2, face="bold",size=22))
+
+plot_Remnant
+
+grid.arrange(plot_Remnant,plot_Disturbed, ncol = 2) #Check the layout of multiple plots
+
+plots2 <- arrangeGrob(plot_Remnant,plot_Disturbed, nrow=1)
+ggsave(plots2, filename = "Fig3_600DPI_BARPLOT_AboveBelowStock_11july2023_v1.png",  width = 17, height = 8, dpi = 600)
