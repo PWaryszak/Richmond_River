@@ -1,0 +1,13 @@
+Site,SiteYear,SiteYearNumeric,Site_short,Site_short_old,SiteYear_old,SiteOldName,SiteRenamed,DepthTo_SinceRehabilitated_cm,SiteRenamed_25y
+MDBP,0,0,BP,BP,BP,Disturbed,Converted,1000,Converted
+MDSD,0,0,SD,SD,SD,Disturbed,Converted,1000,Converted
+MDTUCK,0,0,TUCK,TUCK,TUCK,Disturbed,Converted,1000,Converted
+MNDC,1917,1917,DC,DC,DC,Remnant,Established,50,Established
+MNND,1917,1917,ND,ND,ND,Remnant,Established,50,Established
+MNPL,1917,1917,PL,PL,PL,Remnant,Established,50,Established
+MR1991,1991,1991,1991,1991,1991,Rehabilitated,Rehabilitated,9,Rehabilitated_old
+MR1992,1992,1992,1992,1992,1992,Rehabilitated,Rehabilitated,10.5,Rehabilitated_young
+MRAP,1997,1997,AP,AP,2003,Rehabilitated,Rehabilitated,20,Rehabilitated_young
+MRCH1,1980A,1980,CH1,CH1,1981,Rehabilitated,Rehabilitated,NA,Rehabilitated_old
+MRCH2,1980,1980,CH2,CH2,1977,Rehabilitated,Rehabilitated,6.5,Rehabilitated_old
+MRPL,2000,2000,PL,PL,2001,Rehabilitated,Rehabilitated,NA,Rehabilitated_young
