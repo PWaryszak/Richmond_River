@@ -49,7 +49,7 @@ NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$Slice
 
 
 #Cut slices at the depth where rehab started (DepthAtRehab_cm):
-NewDATA2 <- left_join (NewDATA, SitesToMerge, by = "Site") %>%
+NewDATA2 <- left_join (NewDATA, SitesToMerge, by = "Site") %>% #SitesToMerge -> DepthTo_SinceRehabilitated_cm was set too high to show CAR therein was close to zero.
   mutate(KeepThrow = ifelse(DepthTo_SinceRehabilitated_cm >= Depth_from, "keep", "throw"))%>% #keep slices data are > Depth_from
   filter(KeepThrow=="keep" ) %>% #keep the "keep"
   transform (DepthAtRehab_cm = ifelse(Depth_to <= DepthTo_SinceRehabilitated_cm,  #Cut to the length of DepthTo_SinceRehabilitated_cm
@@ -71,15 +71,19 @@ CAR_Rehab_Established <- NewDATA2 %>%
 View(CAR_Rehab_Established)
 
 CAR_Rehab_Established_short <- CAR_Rehab_Established %>% 
-  select(Site,SiteYearNumeric, SiteRenamed_25y,CAR_MgHaYear ) %>%
-  filter(SiteRenamed_25y != "Converted")
+  select(Site,SiteYearNumeric, SiteRenamed_25y,CAR_MgHaYear ) #%>%filter(SiteRenamed_25y != "Converted")
 
-#Relevel:
+View(CAR_Rehab_Established_short )
+
+#Converted sites had no CAR. Ser CAR in Converted to zero:
+CAR_Rehab_Established_short$CAR2 <- ifelse(CAR_Rehab_Established_short$SiteRenamed_25y == "Converted", 0 ,CAR_Rehab_Established_short$CAR_MgHaYear)
+
+#Relevel CAR_Rehab_Established_short:
 CAR_Rehab_Established_short $ SiteRenamed_25y <- factor(CAR_Rehab_Established_short$SiteRenamed_25y,
-                                                        levels = c("Established","Rehabilitated_young", "Rehabilitated_old"))
-levels(CAR_Rehab_Established_short2 $SiteRenamed_25y)
+                                              levels = c("Converted", "Rehabilitated_young", "Rehabilitated_old", "Established"))
+levels(CAR_Rehab_Established_short $SiteRenamed_25y) ####"Converted" ,"Rehabilitated_young", "Rehabilitated_old", "Established"  
 
-burial_boxplot <- ggplot(CAR_Rehab_Established_short, aes(x= SiteRenamed_25y,y= CAR_MgHaYear)) +
+burial_boxplot <- ggplot(CAR_Rehab_Established_short, aes(x= SiteRenamed_25y,y= CAR2)) +
   labs(x = "",y=bquote("Soil burial rate " (Mg*~ha^-1 ~y^-1)))+
   geom_boxplot(outlier.shape = NULL) +
   geom_jitter()+  
@@ -99,7 +103,8 @@ CAR_AV <- CAR_Rehab_Established_short %>%
   summarise(AV = mean(CAR_MgHaYear, nr.rm=T),
             N = n(),
             SD = sd(CAR_MgHaYear),
-            SE = SD/sqrt(N))
+            SE = SD/sqrt(N)) %>%
+  mutate(CO2_equivalent = AV * 3.67 )
 
 CAR_AV
 SiteRenamed_25y        AV     N    SD     SE
@@ -114,26 +119,25 @@ Plant_Carbon<- select (aa, Site, Treatment2, Total_Aboveground_Biomass_kg_100m2)
   mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10,  #1 kg/100m2 = 0.1 tonnes/ha
          Plant_C = 0.464* Total_Aboveground_Biomass_Mg_ha ) %>%  #1 kg/100m2 = 0.1 tonnes/ha
   
-  left_join(SiteTreat,by = "Site") %>% # To get new site names (SiteRenamed)
-  mutate (Stock = "Plant") %>%
-  left_join(SitesToMerge, by = "Site")
+  left_join(SitesToMerge,by = "Site") %>% # To get new site names (SiteRenamed)
+  mutate (Stock = "Plant") #%>%  left_join(SitesToMerge, by = "Site")
 
 Plant_Carbon
 
 
 #Compute mean of plant stock in remnant to draw a dotted line:
-Established_AV <- filter(Plant_Carbon, SiteRenamed == "Established") %>%
-  select(Plant_C,SiteRenamed) %>% 
-  group_by(SiteRenamed) %>%
+Established_AV <- filter(Plant_Carbon, SiteRenamed_25y == "Established") %>%
+  select(Plant_C,SiteRenamed_25y) %>% 
+  group_by(SiteRenamed_25y) %>%
   summarise(remnant_plant = mean(Plant_C, na.rm=T))
 
 Established_AV #146
 
 #PLOT:
 #Re-level to show Converted last on the plot:
-levels(as.factor((Plant_Carbon$SiteRenamed_25y)))
+unique(Plant_Carbon$SiteRenamed_25y)
 Plant_Carbon$SiteRenamed_25y <- factor(Plant_Carbon$SiteRenamed_25y,
-                                       levels = c("Established", "Rehabilitated_young", "Rehabilitated_old","Converted"))
+                                       levels = c("Converted","Established", "Rehabilitated_young", "Rehabilitated_old"))
 
 Plant_Carbon_boxplot <- ggplot(Plant_Carbon, aes(x=SiteRenamed_25y, y= Plant_C))+
   labs(x = "",y =bquote("Plant organic carbon stock " (Mg*~ha^-1 ~y^-1)))+
@@ -153,22 +157,25 @@ PLANT_AV <- Plant_Carbon %>%
   summarise(AV = mean(Plant_C, nr.rm=T),
             N = n(),
             SD = sd(Plant_C),
-            SE = SD/sqrt(N))
+            SE = SD/sqrt(N)) %>%
+  mutate(CO2_equivalent = AV * 3.67 )
+
 
 PLANT_AV
 
 #Towards Above ground Carbon stocks Results:
 round(66.3 / 146 *100, 0)  #Plant Carbon was 45% young lower compared to established
-round (35.7  / 146 *100, 0)#Plant Carbon was 45% young lower compared to established
+round (35.7  / 146 *100, 0)#Plant Carbon was 24% old lower compared to established
 
 PLANT_sites <- Plant_Carbon %>%
-  group_by(Site) %>%
+  group_by(Site,SiteRenamed_25y) %>%
   summarise(AV = mean(Plant_C, nr.rm=T),
             N = n(),
             SD = sd(Plant_C),
             SE = SD/sqrt(N))
 
 PLANT_sites
+
 Site   SiteRenamed_25y        AV     N    SD    SE
 1 MDBP   Converted             0       1 NA    NA   
 2 MDSD   Converted             0       1 NA    NA   
@@ -181,32 +188,10 @@ Site   SiteRenamed_25y        AV     N    SD    SE
 9 MRAP   Rehabilitated_young  25.4     3  2.33  1.35
 10MRCH1  Rehabilitated_old    20.0     4  8.31  4.16
 11MRCH2  Rehabilitated_old    51.0     4 10.8   5.38
-12 MRPL                       78.2     4 12.8   6.40
+12 MRPL Rehabilitated_young   78.2     4 12.8   6.40
 
 #Soil_C PLOT (soil_till_rehab_boxplot):========
 #Get CarbonStock.Mgha corrected for soil compaction:
-NewDATA <- bb
-NewDATA$C_percent <- ifelse(NewDATA$C_perc == 0, 0.001, NewDATA$C_perc)#convert 0 into 0.001 to run log-models if any
-NewDATA$SliceLength.cm <- (NewDATA$Depth_to - NewDATA$Depth_from) #cm
-NewDATA$PipeDiameter.cm <- 5 #Diameter of coring pipes was 5 cm
-NewDATA$SampleVolume.cm3 <- (pi*(NewDATA$PipeDiameter.cm/2)^2)*NewDATA$SliceLength.cm  #slice volume
-NewDATA$dry_bulk_density.gcm3_corrected <- NewDATA$Dry_bulk_density_gcm3 * NewDATA$Lab_Compaction_Correction_Value
-NewDATA$CarbonDensity.gcm3 <- NewDATA$dry_bulk_density.gcm3_corrected * NewDATA$C_percent/100
-NewDATA$CarbonStock.Mgha <- ((NewDATA$CarbonDensity.gcm3  * 100) * NewDATA$SliceLength.cm )
-
-#C-stock (Stand Age) till Depth of Rehab (DepthTo_SinceRehabilitated_cm)
-NewDATA2 <- left_join (NewDATA, SiteTreat, by = "Site") %>%
-  mutate(KeepThrow = ifelse(DepthTo_SinceRehabilitated_cm >= Depth_from, "keep", "throw")) %>% #keep slices data are > Depth_from
-  filter(KeepThrow=="keep") %>% #keep the "keep"
-  
-  transform (DepthAtRehab_cm = ifelse(Depth_to <= DepthTo_SinceRehabilitated_cm,  #Cut to the length of DepthTo_SinceRehabilitated_cm
-                                      Depth_to, DepthTo_SinceRehabilitated_cm)) %>%
-  
-  mutate (SliceAtRehab_cm = DepthAtRehab_cm - Depth_from) %>% #length of slice at cores up to DepthTo_SinceRehabilitated_cm, for established sites set to 50cm
-  mutate (CarbonStockTillRehab_Mgha = CarbonDensity.gcm3  * 100 * SliceAtRehab_cm) #Soils C stock in core slices till DepthTo_SinceRehabilitated_cm
-
-
-
 
 soil_stock_till_rehab <- select(NewDATA2, Site,SiteYearNumeric, Site_short,Site_Core, Treatment,Depth_to, Depth_Range,
                                 Site_Core, Carbon_stock_in_section_Mg_Cha,Treatment2,CarbonStock.Mgha,
@@ -220,7 +205,7 @@ soil_stock_till_rehab <- select(NewDATA2, Site,SiteYearNumeric, Site_short,Site_
   left_join(SiteTreat, by = "Site" ) %>% #Add columns from SiteTreat 
   mutate(MyColor = ifelse(Site=="MRCH1", "lightgrey","black"))#change Ageiceras-dominated site of MRCH1 to grey if present.
 
-soil_stock_till_rehab
+View(soil_stock_till_rehab)
 #flextable(soil_till_rehab) #For Abstract/Results section
 #write.csv(soil_till_rehab, file = "soil_till_rehab.csv", row.names = F)
 
@@ -259,12 +244,13 @@ round(71.5/122.4 *100,1) # Converted C-stock is on average 58.6% lower than Esta
 #PLOT Soil_C:
 unique(soil_stock_till_rehab$SiteRenamed_25y)#"Established","Rehabilitated_old","Rehabilitated_young"
 #RE-level:
-soil_stock_till_rehab$SiteRenamed_25y <- factor(soil_stock_till_rehab$SiteRenamed_25y,levels = c("Established","Rehabilitated_young","Rehabilitated_old"))
+soil_stock_till_rehab$SiteRenamed_25y <- factor(soil_stock_till_rehab$SiteRenamed_25y,
+                                                levels = c("Converted", "Established","Rehabilitated_young","Rehabilitated_old"))
 
 soil_till_rehab_boxplot <- ggplot(soil_stock_till_rehab,
                                   aes(x= SiteRenamed_25y, y= TotalCarbonStockPerCore )) +
   labs(x = "",y =bquote("Soil organic carbon stock " (Mg*~ha^-1)))+
-  geom_boxplot() +
+  geom_boxplot(outlier.shape = NA) +
   geom_jitter()+  #aes(color=Site_short_old) add color/dots for sites
   theme_classic()+
   theme(axis.text.x=element_text(vjust=0.5,size=12, color = "black",angle=45),
@@ -283,7 +269,7 @@ grid.arrange(Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot,
 
 #To save in higher resolution use arrangeGrob:
 plots <- arrangeGrob(Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot, nrow=1)
-ggsave(plots, filename = "Fig2_600DPI_RehabHorizonBoxplot_25y_04july2023_v2.png",  width = 17, height = 8, dpi = 600)
+ggsave(plots, filename = "Fig2_600DPI_RehabHorizonBoxplot_25y_18july2023_v1.png",  width = 17, height = 8, dpi = 600)
 
 
 ----------------------------------------
