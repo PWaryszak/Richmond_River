@@ -25,7 +25,6 @@ Plant_CarbonStock <- select (aa, Site,Treatment2, Total_Aboveground_Biomass_kg_1
   na.omit() %>%
   filter(Treatment2 != "Disturbed") #there are no data for Disturbed sites.
 
-Plant_CarbonStock$Ecosystem <- droplevels(Plant_CarbonStock$Ecosystem)#drop Disturbed level
 Plant_CarbonStock$Ecosystem <- factor(Plant_CarbonStock$Ecosystem, levels = c("Rehabilitated","Established"))#Relevel to move Rehabilitated to intercept on plant_carbon_model
 #write.csv(Plant_CarbonStock, file = "Plant_CarbonStock.csv",row.names = F)
 View(Plant_CarbonStock)
@@ -83,6 +82,59 @@ summary(Soil_C_model)
 #Ecosystem=Established   93.607     30.940  4.123   3.025   0.0375
 tab_model(Soil_C_model,show.re.var=T)
 
-#Table S3  Site effects (Word Table)=======
+#Table S3 (off 2 models) Site effects (Word Table)=======
 tab_model(Soil_C_model,plant_site_model,show.re.var=T)
 
+
+#Table S3 off summarise function (restructure Above Table to AV+SE)========
+#Run all above /\:
+
+#PLANT (Aboveground):======
+Plant_CarbonStock$Ecosystem <- factor(Plant_CarbonStock$Ecosystem, levels = c("Rehabilitated","Established"))#Relevel to move Rehabilitated to intercept on plant_carbon_model
+head(Plant_CarbonStock)
+
+Aboveground <-   Plant_CarbonStock %>%
+  mutate(Plant_C = Total_Aboveground_Biomass_Mg_ha * 0.464) %>% ##0.464 conversion factor after Kauffman & Donato 2012 and Howard et al 2014)
+  
+  #Rename the Rehab site based on their age:
+  mutate(SiteRenamed_25y = ifelse (SiteYearNumeric < 1992 & SiteRenamed =="Rehabilitated", "Rehabilitated_old" ,SiteRenamed)) %>%
+  mutate(SiteRenamed_25y = ifelse (SiteYearNumeric >= 1992 & SiteRenamed =="Rehabilitated", "Rehabilitated_young" ,SiteRenamed_25y)) %>%
+  
+  group_by(Site,SiteRenamed_25y) %>%
+  summarise(AV = round(mean(Plant_C, nr.rm=T),2),
+                           N = n(),
+                           SD = sd(Plant_C),
+                           SE = round(SD/sqrt(N),2))  # %>% mutate(CO2_equivalent = AV * 3.67 )
+Aboveground
+
+Aboveground_united <- Aboveground %>%
+  select(AV,SE, Site, SiteRenamed_25y) %>%
+  #unite("stock", c("AV", "SE"), sep = " ± " ) %>%
+  rename(Site_Type = SiteRenamed_25y) %>%
+  mutate(StockSource = "Aboveground")
+
+  
+Aboveground_united
+
+#Soil (Belowground):========
+View(soil_carbon)
+
+Belowground <-   soil_carbon %>%
+
+  group_by(Site,SiteRenamed_25y) %>%
+  summarise(AV = round(mean(Soil_C, nr.rm=T),2),
+            N = n(),
+            SD = sd(Soil_C),
+            SE = round(SD/sqrt(N),2))  # %>% mutate(CO2_equivalent = AV * 3.67 )
+Belowground
+
+Belowground_united <- Belowground %>%
+  select(AV,SE, Site, SiteRenamed_25y) %>%
+  #unite("stock", c("AV", "SE"), sep = "//± " ) %>%
+  rename(Site_Type = SiteRenamed_25y) %>%
+  mutate(StockSource = "Belowground")
+
+Belowground_united
+
+AB <- rbind(Belowground_united, Aboveground_united)
+write.csv(AB, file = "Table3_Restructured.csv")
