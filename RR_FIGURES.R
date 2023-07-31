@@ -57,7 +57,7 @@ NewDATA2 <- left_join (NewDATA, SitesToMerge, by = "Site") %>% #SitesToMerge -> 
   mutate (SliceAtRehab_cm = DepthAtRehab_cm - Depth_from) %>% #lenght of slice at cores up to DepthTo_SinceRehabilitated_cm
   mutate (CarbonStockTillRehab_Mgha = CarbonDensity.gcm3  * 100 * SliceAtRehab_cm) #Soil C stock in each cores till DepthTo_SinceRehabilitated_cm
 
-View(NewDATA2)
+names(NewDATA2)
 
 #Compute Soil_CAR (Stock to Rehab Horizon / Stand_Age):
 CAR_Rehab_Established <- NewDATA2 %>%
@@ -80,10 +80,10 @@ CAR_Rehab_Established_short$CAR2 <- ifelse(CAR_Rehab_Established_short$SiteRenam
 
 #Relevel CAR_Rehab_Established_short:
 CAR_Rehab_Established_short $ SiteRenamed_25y <- factor(CAR_Rehab_Established_short$SiteRenamed_25y,
-                                              levels = c("Converted", "Rehabilitated_young", "Rehabilitated_old", "Established"))
+                                              levels = c("Converted", "Established", "Rehabilitated_young", "Rehabilitated_old"))
 levels(CAR_Rehab_Established_short $SiteRenamed_25y) ####"Converted" ,"Rehabilitated_young", "Rehabilitated_old", "Established"  
 
-burial_boxplot <- ggplot(CAR_Rehab_Established_short, aes(x= SiteRenamed_25y,y= CAR2)) +
+burial_boxplot <- ggplot(CAR_Rehab_Established_short, aes(x= SiteRenamed_25y, y= CAR2)) +
   labs(x = "",y=bquote("Soil burial rate " (Mg*~ha^-1 ~y^-1)))+
   geom_boxplot(outlier.shape = NULL) +
   geom_jitter()+  
@@ -95,6 +95,32 @@ burial_boxplot <- ggplot(CAR_Rehab_Established_short, aes(x= SiteRenamed_25y,y= 
 
 burial_boxplot
 
+
+
+
+
+---------------------------------------------
+#Inset of CAR from Rehab young sites only:
+rehab_young <- CAR_Rehab_Established_short[CAR_Rehab_Established_short$SiteRenamed_25y == "Rehabilitated_young",]
+
+burial_boxplot_young <- ggplot(rehab_young, aes(x= SiteRenamed_25y, y= CAR2)) +
+  labs(x = "",y=bquote("Soil burial rate " (Mg*~ha^-1 ~y^-1)))+
+  geom_boxplot(outlier.shape = NULL) +
+  geom_jitter(aes(fill=Site,shape=Site),size=6)+  
+  scale_shape_manual(values = c(24,24))+
+  theme_classic()+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=18, colour = "black"),
+        axis.text.y=element_text(size=12),
+        axis.title.y=element_text(size=20),
+        axis.title.x=element_text(size=20),
+        legend.position =   "bottom" ,  # c(.85, .85),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(face = "italic", size=14),
+        plot.title = element_text(hjust = 0.5,lineheight=1.2, face="bold",size=22))
+
+
+burial_boxplot_young
 
 #CAR averages 4 Results=====
 #Sum up for the Results section in the MAnuscript:
@@ -141,7 +167,7 @@ Plant_Carbon$SiteRenamed_25y <- factor(Plant_Carbon$SiteRenamed_25y,
 
 Plant_Carbon_boxplot <- ggplot(Plant_Carbon, aes(x=SiteRenamed_25y, y= Plant_C))+
   labs(x = "",y =bquote("Plant organic carbon stock " (Mg*~ha^-1 ~y^-1)))+
-  geom_boxplot(outlier.shape = NULL) +
+  geom_boxplot(outlier.shape = NA) +
   geom_jitter()+  #aes(color=Site_short_old) add color/dots for sites
   theme_classic()+
   theme(axis.text.x=element_text(vjust=0.5,size=12, color = "black",angle=45),
@@ -263,14 +289,53 @@ soil_till_rehab_boxplot
 
 
 
+
+
+
 # Fig2:Combine Plots (Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot):=======
 grid.arrange(Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot,
              ncol = 3)
 
 #To save in higher resolution use arrangeGrob:
 plots <- arrangeGrob(Plant_Carbon_boxplot, soil_till_rehab_boxplot, burial_boxplot, nrow=1)
-ggsave(plots, filename = "Fig2_600DPI_RehabHorizonBoxplot_25y_18july2023_v1.png",  width = 17, height = 8, dpi = 600)
+ggsave(plots, filename = "Fig2_600DPI_RehabHorizonBoxplot_31july2023_v1.png",  width = 17, height = 8, dpi = 600)
 
+
+
+#SUBSET FIGURE (Established and Converted only to compare)==========
+names(soil_stock_till_rehab)
+names(CAR_Rehab_Established_short)
+
+soil_till_rehab_boxplot2 <- ggplot(soil_stock_till_rehab[soil_stock_till_rehab$SiteRenamed_25y=="Converted" |soil_stock_till_rehab$SiteRenamed_25y=="Established",],
+                                  aes(x= SiteRenamed_25y, y= TotalCarbonStockPerCore )) +
+  labs(x = "",y =bquote("Soil organic carbon stock " (Mg*~ha^-1)))+
+  geom_boxplot(outlier.shape = NA) +
+  scale_y_continuous (limits= c(0,150))+
+  geom_jitter()+  #aes(color=Site_short_old) add color/dots for sites
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=20, color = "black",angle=0),
+        axis.text.y=element_text(size=20, color = "black"),
+        axis.title.y=element_text(size=20, color = "black"))
+
+soil_till_rehab_boxplot2
+
+
+burial_boxplot2 <- ggplot(CAR_Rehab_Established_short[CAR_Rehab_Established_short$SiteRenamed_25y=="Converted" | CAR_Rehab_Established_short$SiteRenamed_25y=="Established",],
+                          aes(x= SiteRenamed_25y,y= CAR2)) +
+  labs(x = "",y=bquote("Soil burial rate " (Mg*~ha^-1 ~y^-1)))+
+  geom_boxplot(outlier.shape = NULL) +
+  geom_jitter()+  
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=20, color = "black",angle=0),
+        axis.text.y=element_text(size=20, color = "black"),
+        axis.title.y=element_text(size=20, color = "black"),
+        legend.position = "none")
+
+burial_boxplot2
+
+#To save in higher resolution use arrangeGrob:
+plots2 <- arrangeGrob(soil_till_rehab_boxplot2, burial_boxplot2, nrow=1)
+ggsave(plots2, filename = "FigEXTRA_600DPI_EstablishedConverted_24July2023_v3.png",  width = 17, height = 8, dpi = 600)
 
 ----------------------------------------
 
@@ -290,10 +355,11 @@ names(bb)
 
 #merge sites and corresponding treatments
 SiteTreat <- read.csv("RR_SiteTreatment_PC.csv")#to join Treatments to 
-SiteTreatShort <- select( SiteTreat, Site, Site_short, SiteRenamed)
+names(SiteTreat)
+SiteTreatShort <- select(SiteTreat,SiteRenamed, Site)
 
 #Compute Mean Soil C-stock: Filter out sites down to 50cm deep:
-NewDATA_Converted <- left_join (NewDATA2, SiteTreatShort_a, by = "Site")
+NewDATA_Converted <- left_join (NewDATA2, SiteTreatShort, by = "Site")
 
 soil_stock_50cm<- select(NewDATA_Converted, Site,Depth_to, Site_Core, Treatment,
                                Site_Core,CarbonStock.Mgha,Site_short, SiteRenamed) %>%
@@ -318,13 +384,13 @@ soil_stock_50cm_summary <- soil_stock_50cm %>%
 soil_stock_50cm_summary 
 
 #Compute Plant C-Stock (mean +- SE):=========
-
 #Summarise abovegorund carbon stock:
 names(aa) #Shorten the aa file  and a missing columns as per below:
-aa_a <- left_join(aa,SiteTreatShort_a, by = "Site") #aa dataset miss SiteRenamed column. Join with SiteTreat_a
+aa_a <- left_join(aa,SiteTreatShort, by = "Site") #aa dataset miss SiteRenamed column. Join with SiteTreat_a
 
 plant_stock_summary<- select (aa_a, Site,  Total_Aboveground_Biomass_kg_100m2,Site_short,SiteRenamed) %>%
-  mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10 )%>% #1 kg/100m2 = 0.1 tonnes/ha
+  mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10 *0.464 )%>% #1 kg/100m2 = 0.1 tonnes/ha, *0.464 conversion factor after Kauffman & Donato 2012 and Howard et al 2014)
+
   gather(key = treat, value = mass, Total_Aboveground_Biomass_Mg_ha) %>% 
   group_by(Site,Site_short,SiteRenamed) %>%
   summarise(AV=mean(mass, na.rm = T),
@@ -354,7 +420,7 @@ plot_Disturbed <- ggplot(ab_Disturbed, aes(x=Site_short, y=AV, fill = Stock))+
   geom_bar(position="identity", stat="identity")+
   geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
   geom_hline(yintercept=0)+
-  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-150,600))+ #abs to remove negative values on y-axis below 0
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-150,300))+ #abs to remove negative values on y-axis below 0
   scale_fill_manual(values = c("darkgreen","lightblue"))+
   xlab("Site")+ ylab("")+
   ggtitle("Converted")+
@@ -374,7 +440,7 @@ plot_Remnant <- ggplot(ab_Remnant, aes(x=Site_short, y=AV, fill = Stock))+
   geom_bar(position="identity", stat="identity")+
   geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
   geom_hline(yintercept=0)+
-  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-150,600))+ #abs to remove negative values on y-axis below 0
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-150,300))+ #abs to remove negative values on y-axis below 0
   scale_fill_manual(values = c("darkgreen","lightblue"))+
   xlab("Site") + ylab(bquote("Organic carbon stock " (Mg*~ha^-1)))+
   ggtitle("Established")+
@@ -394,4 +460,92 @@ plot_Remnant
 grid.arrange(plot_Remnant,plot_Disturbed, ncol = 2) #Check the layout of multiple plots
 
 plots2 <- arrangeGrob(plot_Remnant,plot_Disturbed, nrow=1)
-ggsave(plots2, filename = "Fig3_600DPI_BARPLOT_AboveBelowStock_11july2023_v1.png",  width = 17, height = 8, dpi = 600)
+ggsave(plots2, filename = "Fig3_600DPI_BARPLOT_AboveBelowStock_31july2023_ConvertedToCarbonOnly.png",  width = 17, height = 8, dpi = 600)
+
+
+
+
+#INSET of Rehab young sites:==========
+#Soil data (50cm deep):
+#merge sites and corresponding treatments
+SiteTreat <- read.csv("RR_SiteTreatment_PC.csv")#to join Treatments to 
+names(SiteTreat)
+SiteTreatShort_a <- select( SiteTreat, Site, SiteRenamed_25y,SiteYearNumeric)
+
+#Compute Mean Soil C-stock: Filter out sites down to 50cm deep:
+NewDATA_Converted <- left_join (NewDATA, SiteTreatShort_a, by = "Site")
+names(NewDATA_Converted)
+
+soil_stock_50cm<- select(NewDATA_Converted, Site,Depth_to, Site_Core, Treatment,
+                         Site_Core,CarbonStock.Mgha,Site_short, SiteRenamed_25y) %>%
+  
+  filter(Depth_to <=50) %>% # established/converted stock set to below 50 cm to enable comparison
+  
+  group_by(Site_Core, Site, Site_short, SiteRenamed_25y) %>% #grouping by core till 50 cm deep
+  summarise(TotalCarbonStockPerCore = sum(CarbonStock.Mgha))%>% #Add-up all slices 
+  
+  separate(Site_Core, into = c("Site","CoreNumber"), sep = "_") 
+
+soil_stock_50cm
+
+soil_stock_50cm_summary <- soil_stock_50cm %>%
+  group_by(SiteRenamed_25y,Site,Site_short) %>%
+  summarise(AV = mean(TotalCarbonStockPerCore, nr.rm=T),
+            N = n(),
+            SD = sd(TotalCarbonStockPerCore),
+            SE = SD/sqrt(N)) %>%
+  mutate (Stock = "Soil")
+
+soil_stock_50cm_summary 
+
+#Compute Plant C-Stock (mean +- SE):
+#Summarise abovegorund carbon stock:
+names(aa) #Shorten the aa file  and a missing columns as per below:
+aa_a <- left_join(aa,SiteTreatShort_a, by = "Site") #aa dataset miss SiteRenamed_25y column. Join with SiteTreat_a
+head(aa_a)
+
+plant_stock_summary<- select (aa_a, Site, SiteYearNumeric , Total_Aboveground_Biomass_kg_100m2,Site_short,SiteRenamed_25y) %>%
+  mutate(Total_Aboveground_Biomass_Mg_ha = Total_Aboveground_Biomass_kg_100m2 / 10 *0.464 )%>% #1 kg/100m2 = 0.1 tonnes/ha, *0.464 conversion factor after Kauffman & Donato 2012 and Howard et al 2014)
+  
+  gather(key = treat, value = mass, Total_Aboveground_Biomass_Mg_ha) %>% 
+  
+  group_by(Site,Site_short,SiteRenamed_25y) %>%
+  summarise(AV=mean(mass, na.rm = T),
+            SD=sd(mass),
+            N = length(mass),
+            SE= SD / sqrt(N)) %>%
+  mutate (Stock = "Plant")
+
+plant_stock_summary
+plant_stock_summary[is.na(plant_stock_summary)] <- 0 #Replace NaN (4 Converted sites 4 plotting purpose) with zeros and join with site label (SiteTreat) dataset:
+
+
+ab <- rbind (plant_stock_summary,soil_stock_50cm_summary ) %>%
+  mutate(AV= ifelse(Stock =="Plant",AV,AV * -1))%>% #Turn soil values into negative values
+  mutate(project = "RR")
+
+ab_Young <- filter(ab, SiteRenamed_25y == "Rehabilitated_young") #Use this for plotting Converted sites
+ab_Young
+
+#Draw figure breaks to fit data in:
+MyBreaks <- c(-150,-100, -50, 0, 100, 200,300 ,400,500,600)
+
+#Plot Disturbed Plant biomass:
+plot_Young <- ggplot(ab_Young, aes(x=Site, y=AV, fill = Stock))+
+  geom_bar(position="identity", stat="identity")+
+  geom_errorbar( aes(ymin= AV+SE, ymax = AV-SE), width=.4)+
+  geom_hline(yintercept=0)+
+  scale_y_continuous(breaks = MyBreaks,labels = abs(MyBreaks), limits = c(-200,150))+ #abs to remove negative values on y-axis below 0
+  scale_fill_manual(values = c("darkgreen","lightblue"))+
+  xlab("")+ ylab("")+
+  ggtitle("Rehabilitated young sites (50 cm cores)")+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=18, colour = "black"),
+        axis.text.y=element_text(size=12),
+        axis.title.y=element_text(size=20),
+        axis.title.x=element_text(size=20),
+        legend.position = c(.5, .85),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(face = "italic", size=14),
+        plot.title = element_text(hjust = 0.5,lineheight=1.2, face="bold",size=22))
+plot_Young
